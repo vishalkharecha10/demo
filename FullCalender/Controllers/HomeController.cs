@@ -11,6 +11,7 @@ using System.Data;
 
 namespace FullCalender.Controllers
 {
+
     public class HomeController : Controller
     {
         /// <summary>
