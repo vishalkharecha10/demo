@@ -1,0 +1,352 @@
+﻿@model  FullCalender.Entities.TaskDetails
+@{
+    ViewBag.Title = "Home Page";
+}
+
+<head>
+    <script src="~/Scripts/moment.min.js"></script>
+    <script src="~/Scripts/fullcalendar.min.js"></script>
+</head>
+
+<div>
+    <a href="#" style="margin-top: 50px; margin-left:15px;" id="btnAddEvent" class="btn btn-primary" title="Add Task">Add Task</a>
+</div>
+
+<div class="container-fluid row" style="margin-top: 30px;">
+    <div id='calendar1' class='calendar col-md-8' style="cursor:default;"></div>
+    @*<div id='calendar2' class='calendar col-md-5' style="cursor:default;"></div>*@
+</div>
+
+<form method="post" id="taskForm">
+    @Html.AntiForgeryToken()
+
+    <div class="modal fade" id="add-inquiry-modal">
+        <div class="modal-dialog">
+            <div class="modal-content" id="modal-content-inquiry">
+                <div class="modal-header">
+                    <a href="#" title="Close" data-dismiss="modal" style="padding: 15px; display: inline-block; position: absolute; right: 0; top: 0;"><img src="~/Content/images/icon-close.png" alt="Close" /></a>
+                    <h4 class="modal-title">Task</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="subscriber-registration">
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <div class="form-group">
+                                    @Html.LabelFor(model => model.Name)
+                                    @Html.EditorFor(model => model.Name, new { htmlAttributes = new { @class = "form-control", @id = "txtName", @maxlength = "100" } })
+                                    @Html.ValidationMessageFor(model => model.Name, "", new { @class = "text-danger" })
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <div class="form-group">
+                                    @Html.LabelFor(model => model.Description)
+                                    @Html.TextAreaFor(model => model.Description, new { @class = "form-control", @id = "txtDescription", @name = "Description", @maxlength = "500" })
+                                    @Html.ValidationMessageFor(model => model.Description, "", new { @class = "text-danger" })
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-sm-6">
+                                <div class="form-group">
+                                    @Html.LabelFor(model => model.StartTime)
+                                    <div class='input-group'>
+                                        @Html.TextBoxFor(m => m.StartTime, new { @class = "form-control", @id = "txtStartTime", @placeholder = "From date" })
+                                        <span class="input-group-addon"></span>
+                                    </div>
+                                    @Html.ValidationMessageFor(model => model.StartTime, "", new { @class = "text-danger" })
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="form-group">
+                                    @Html.LabelFor(model => model.EndTime)
+                                    <div class='input-group'>
+                                        @Html.TextBoxFor(m => m.EndTime, new { @class = "form-control", @id = "txtEndTime", @placeholder = "To date" })
+                                        <span class="input-group-addon"></span>
+                                    </div>
+                                    @Html.ValidationMessageFor(model => model.EndTime, "", new { @class = "text-danger" })
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-primary" name="btnSubmit" id="btnSubmit">Add Task</button>
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                </div>
+
+                @if (Model != null && Model.Id > 0)
+                {
+                    <input type="hidden" id="hdnTaskId" data-val="@Model.Id" />
+                }
+                else
+                {
+                    <input type="hidden" id="hdnTaskId" data-val="0" />
+                }
+            </div>
+        </div>
+    </div>
+
+</form>
+
+<script>
+    $(document).ready(function () {
+        InitializeCalendar();
+    });
+
+    function InitializeCalendar() {
+        $.ajax({
+            type: "GET",
+            contentType: "application/json",
+            url: "Home/GetTasks",
+            dataType: "json",
+            success: function (data) {
+                $('#calendar1').empty();
+                $('#calendar1').fullCalendar({
+                    header: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'month,agendaWeek,agendaDay'
+                    },
+                    defaultView: 'agendaWeek',
+                    height: 600,
+                    selectable: true,
+                    overflow: 'auto',
+                    slotDuration: '00:30:00',
+                    allDaySlot: false,
+                    events: $.map(data, function (item, i) {
+                        var eventStartDate = new Date(parseInt(item.StartTime.substr(6)));
+                        var eventEndDate = new Date(parseInt(item.EndTime.substr(6)));
+
+                        var event = new Object();
+                        event.id = item.Id;
+                        event.description = item.Description;
+                        event.start = new Date(eventStartDate.getFullYear(), eventStartDate.getMonth(), eventStartDate.getDate(), eventStartDate.getHours(), eventStartDate.getMinutes(), eventStartDate.getSeconds(), 0);
+                        event.end = new Date(eventEndDate.getFullYear(), eventEndDate.getMonth(), eventEndDate.getDate(), eventEndDate.getHours(), eventEndDate.getMinutes(), eventEndDate.getSeconds(), 0);
+                        event.title = item.Name;
+                        return event;
+                    }),
+                    editable: true,
+                    eventClick: function (event) {
+                        $('#txtName').val(event.title);
+                        $('#txtDescription').val(event.description);
+                        $('#txtStartTime').val(event.start.format());
+                        $('#txtEndTime').val(event.end.format());
+                        $('#btnSubmit').text("Update Task");
+                        $('#hdnTaskId').val(event.id);
+                        $('#add-inquiry-modal').modal("show");
+                    },
+                    eventDrop: function (event, delta, revertFunc) {
+                        if (confirm("Are you sure about this change?")) {
+                            updateEvent(event);
+                        }
+                        else {
+                            revertFunc();
+                        }
+                    },
+                    eventResize: function (event, delta, revertFunc) {
+
+                        if (confirm("Are you sure about this change?")) {
+                            updateEvent(event);
+                        }
+                        else {
+                            revertFunc();
+                        }
+
+                    }
+                });
+            },
+            error: function (XMLHttpRequest, textStatus, errorThrown) {
+                //-- log error
+            }
+        });
+    }
+
+    $('#btnAddEvent').click(function () {
+        $('#hdnTaskId').val('0');
+        $('#txtName').val('');
+        $('#txtDescription').val('');
+        $('#txtStartTime').val('');
+        $('#txtEndTime').val('');
+        $('#btnSubmit').text("Add Task");
+        $('#add-inquiry-modal').modal("show");
+    });
+
+    $('#btnSubmit').click(function () {
+        var id = $('#hdnTaskId').val();
+        var name = $('#txtName').val();
+        var description = $('#txtDescription').val();
+        var startTime = $('#txtStartTime').val();
+        var endTime = $('#txtEndTime').val();
+
+        var model = { 'Name': name, 'Description': description, 'StartTime': startTime, 'EndTime': endTime, 'Id': id };
+
+        debugger
+
+        if (id > 0) {
+            $.ajax({
+                url: 'Home/UpdateTask',
+                type: "POST",
+                contentType: "application/json charset=utf-8",
+                data: JSON.stringify(model),
+                success: function (data) {
+                    if (data == 200) {
+                        $('#add-inquiry-modal').modal("hide");
+                        InitializeCalendar();
+                    }
+                }
+            });
+        }
+        else {
+            $.ajax({
+                url: 'Home/AddTask',
+                type: "POST",
+                contentType: "application/json charset=utf-8",
+                data: JSON.stringify(model),
+                success: function (data) {
+                    if (data != 0) {
+                        $('#add-inquiry-modal').modal("hide");
+                        InitializeCalendar();
+                    }
+                },
+                error: function (data) {
+                    alert('Internal Server Error: Task not added')
+                }
+            });
+        }
+
+    });
+
+    function updateEvent(event) {
+        debugger
+        var id = event.id;
+        var name = event.title;
+        var description = event.description;
+        var startTime = event.start.format();
+        var endTime = event.end.format();
+        var model = { 'Name': name, 'Description': description, 'StartTime': startTime, 'EndTime': endTime, 'Id': id };
+
+        $.ajax({
+            url: 'Home/UpdateTask',
+            type: "POST",
+            contentType: "application/json charset=utf-8",
+            data: JSON.stringify(model),
+            success: function (data) {
+                debugger
+                if (data == 200) {
+                    debugger
+                    InitializeCalendar();
+                }
+            }
+        });
+    }
+
+    //var $cal1 = $('#calendar1');
+
+    //var dt = new Date();
+    //dt.setHours(dt.getHours() + 2);
+
+    //var dt1 = new Date();
+    //dt1.setHours(dt1.getHours() + 4);
+
+    //var AllEvents = [
+    //    {
+    //        title: 'test1',
+    //        start: dt,
+    //        backgroundColor: 'red',
+    //        borderColor: 'black',
+    //        textColor: 'blue',
+    //        color: 'white'
+    //    },
+    //    {
+    //        title: 'test2',
+    //        start: dt1,
+    //        backgroundColor: 'red',
+    //        borderColor: 'black',
+    //        textColor: 'blue',
+    //        color: 'white'
+    //    },
+
+    //]
+
+    //var newEvent = {
+    //    title: 'Test Task First time',
+    //    start: dt,
+    //    backgroundColor: 'red',
+    //    borderColor: 'black',
+    //    textColor: 'blue',
+    //    color: 'white'
+    //};
+
+    //$cal1.fullCalendar
+    //    ({
+    //        header: {
+    //            left: 'prev,next today',
+    //            center: 'title',
+    //            right: 'month,agendaWeek,agendaDay'
+    //        },
+    //        //dayClick: function (date) {
+    //        //    cal2GoTo(date);
+    //        //},
+    //        //eventClick: function (calEvent) {
+    //        //    cal2GoTo(calEvent.start);
+    //        //},
+    //        editable: true,
+    //        defaultView: 'agendaWeek',
+    //        editable: true,
+    //        allDaySlot: false,
+    //        selectable: true,
+    //        events: AllEvents
+    //    });
+    //$("#calendar").fullCalendar('addEventSource', events)
+
+    //$('#btnAddEvent').click(function () {
+    //    var newEvent = {
+    //        title: 'Test Task First time',
+    //        start: new Date(),
+    //        backgroundColor: 'red',
+    //        borderColor: 'black',
+    //        textColor: 'blue',
+    //        color: 'white'
+    //    };
+    //    $('#calendar1').fullCalendar('renderEvent', newEvent, 'stick');
+    //});
+
+        //$("#taskForm").submit(function (event) {
+        //    var $form = $(this);
+        //    var data = getFormData($form);
+
+        //    $.ajax({
+        //        type: "POST",
+        //        data: data,
+        //        url: 'Home/AddTask',
+        //        success: function (result) {
+        //            if (result.Success) {
+        //                $('#add-inventory-modal').modal("hide");
+        //                ShowMessageToastr("success", result.Message);
+        //                BindDataTableInventory();
+        //            }
+        //            else {
+        //                result.Message && ShowMessageToastr("danger", result.Message);
+        //            }
+        //        }
+        //    });
+        //    event.preventDefault();
+        //    return false;
+        //});
+
+        //function getFormData($form) {
+        //    var unindexed_array = $form.serializeArray();
+        //    var indexed_array = {};
+
+        //    $.map(unindexed_array, function (n, i) {
+        //        indexed_array[n['name']] = n['value'];
+        //    });
+
+        //    return indexed_array;
+        //}
+</script>
